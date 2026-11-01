@@ -18,7 +18,7 @@ if "GEMINI_API_KEY" in st.secrets:
 else:
     st.error("לא נמצא מפתח API. ודא שהגדרת אותו ב-Advanced Settings.")
 
-model = genai.GenerativeModel('gemini-2.5-flash')
+model = genai.GenerativeModel('gemini-3.8-flash')
 
 def generate_question(q_type):
     prompt = f"""
