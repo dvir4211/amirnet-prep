@@ -3,71 +3,82 @@ import google.generativeai as genai
 import json
 import re
 import threading
-import random
 import time
 
-# הגדרות תצוגה לעיצוב מודרני, ממורכז וצבעוני
-st.set_page_config(page_title="Amirnet Prep", layout="centered", initial_sidebar_state="collapsed")
+# הגדרת תצוגה שמתפרסת היטב גם במחשב וגם בנייד
+st.set_page_config(page_title="Amirnet Prep", layout="wide", initial_sidebar_state="expanded")
 
+# CSS מתקדם: אנימציות, צבעים חיים (בסגנון זינוק), רספונסיביות למחשב/נייד
 st.markdown("""
     <style>
         #MainMenu, header, footer {visibility: hidden;}
         
-        /* עיצוב רקע ומרווחים */
-        .block-container { 
-            direction: rtl; 
-            text-align: right; 
-            padding-top: 1rem; 
-            max-width: 500px;
+        /* התאמה רספונסיבית */
+        @media (min-width: 768px) {
+            .block-container { max-width: 750px; margin: 0 auto; direction: rtl; text-align: right; }
+        }
+        @media (max-width: 767px) {
+            .block-container { max-width: 100%; padding: 1rem; direction: rtl; text-align: right; }
         }
         
-        /* כרטיסיית השאלה - עיצוב נקי וברור */
+        /* אנימציות */
+        @keyframes slideUpFade {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animated-box { animation: slideUpFade 0.4s ease-out forwards; }
+        
+        /* כרטיסיית שאלה */
         .question-box {
             background-color: #ffffff;
-            padding: 25px;
+            padding: 30px;
             border-radius: 20px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            margin-bottom: 25px;
             direction: ltr;
             text-align: left;
-            font-size: 19px;
+            font-size: 20px;
             line-height: 1.6;
-            border-top: 6px solid #4A90E2;
+            border-top: 6px solid #00d2ff;
+            color: #2b2b2b;
         }
         
-        /* כפתורי תשובות - צבעים חיים יותר */
+        /* כפתורי תשובות */
         .stButton>button { 
             width: 100%; 
-            min-height: 60px; 
-            font-size: 17px; 
-            margin-top: 10px; 
-            border-radius: 15px; 
-            border: 2px solid #e1e4e8;
+            min-height: 65px; 
+            font-size: 18px; 
+            margin-top: 12px; 
+            border-radius: 12px; 
+            border: 2px solid #edf2f7;
             background-color: #ffffff;
-            color: #24292e;
+            color: #2d3748;
             font-weight: 500;
-            transition: all 0.2s ease;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
         }
         .stButton>button:hover {
-            border-color: #4A90E2;
-            background-color: #f1f8ff;
-            transform: translateY(-2px);
+            border-color: #00d2ff;
+            background-color: #f0faff;
+            transform: translateY(-3px);
+            box-shadow: 0 6px 15px rgba(0, 210, 255, 0.15);
         }
         
-        /* קופסת הסבר מודגשת */
+        /* קופסת הסבר מובנית וצבעונית */
         .explanation-box { 
-            background-color: #f0f7ff; 
-            padding: 20px; 
-            border-radius: 15px; 
+            background-color: #fafcff; 
+            padding: 25px; 
+            border-radius: 16px; 
             margin-top: 25px; 
-            color: #0366d6;
-            font-size: 16px;
-            border-right: 5px solid #4A90E2;
-            line-height: 1.5;
+            border: 1px solid #e2e8f0;
+            border-right: 6px solid #48bb78;
         }
+        .exp-section { margin-bottom: 15px; }
+        .exp-title { color: #2c5282; font-weight: bold; font-size: 17px; margin-bottom: 5px; }
+        .exp-text { color: #4a5568; font-size: 16px; line-height: 1.5; }
         
-        .title-text { text-align: center; color: #24292e; font-size: 28px; font-weight: 800; margin-bottom: 20px; }
-        .stats-text { text-align: center; color: #6a737d; font-size: 15px; margin-bottom: 15px; font-weight: 600;}
+        .title-text { text-align: center; color: #1a202c; font-size: 32px; font-weight: 900; margin-bottom: 30px; letter-spacing: -0.5px;}
+        .stats-text { text-align: center; color: #718096; font-size: 16px; margin-bottom: 15px; font-weight: 600;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -76,13 +87,12 @@ if "GEMINI_API_KEY" in st.secrets:
 
 model = genai.GenerativeModel('gemini-3.8-flash')
 
-# מאגר הפרומפטים לפי סוג התרגול
 PROMPTS = {
     "השלמת משפטים": "Question type: Sentence Completion. Advanced academic vocabulary (C1/C2).",
     "ניסוח מחדש": "Question type: Restatements. Complex logical structures and pivot words.",
-    "פירוק מורפולוגי (תחיליות וסופיות)": "Question type: Morphological Breakdown. Provide an advanced academic word. Ask for its meaning. The explanation MUST break down its prefixes, suffixes, and root to show how to deduce the meaning.",
-    "אלימינציה עיוורת (דקדוק והקשר)": "Question type: Grammar & Context Elimination. Provide a sentence with a BLANK. The correct word should be extremely rare or made-up. The options must be grammatically different (noun, verb, prep) or logically impossible except for one. The explanation must teach how to eliminate options using grammar/context clues without knowing the word.",
-    "אוצר מילים ואסוציאציות": "Question type: Vocabulary Practice. Provide a high-level English word. Options: 4 Hebrew translations. The explanation must include: the correct translation, an English example sentence, and a highly creative, memorable Hebrew mnemonic/association (אסוציאציה זיכרונית) to remember it."
+    "פירוק מורפולוגי (תחיליות וסופיות)": "Question type: Morphological Breakdown. Target an advanced academic word.",
+    "אלימינציה עיוורת (דקדוק והקשר)": "Question type: Grammar & Context Elimination. Correct word must be obscure, options grammatically different.",
+    "אוצר מילים ואסוציאציות": "Question type: Vocabulary Practice. Options are Hebrew translations."
 }
 
 def generate_questions(q_type, num_questions=10):
@@ -90,13 +100,15 @@ def generate_questions(q_type, num_questions=10):
     prompt = f"""
     Create {num_questions} high-level English questions for the Israeli AMIRNET exam.
     {prompt_instruction}
-    Output exactly in this JSON FORMAT (an array of objects), in Hebrew (except for English text). Do not use Markdown formatting in keys.
+    Output exactly in this JSON FORMAT (an array of objects).
     [
         {{
             "question": "The English text or sentence",
             "options": ["Option A", "Option B", "Option C", "Option D"],
             "correct_answer": "The correct option",
-            "explanation": "הסבר מפורט בעברית לפי ההנחיות."
+            "exp_translation": "תרגום מדויק של המשפט המקורי / המילה לעברית",
+            "exp_correct": "הסבר מדוע התשובה הנכונה היא הנכונה",
+            "exp_wrong": "תרגום המסיחים האחרים והסבר מדוע כל אחד מהם שגוי לוגית/תחבירית"
         }}
     ]
     """
@@ -110,43 +122,38 @@ def generate_questions(q_type, num_questions=10):
     except Exception as e:
         return []
 
-# פונקציה שרצה ברקע לטעינת המקבץ הבא
 def fetch_in_background(q_type, target_list, num_questions):
     new_qs = generate_questions(q_type, num_questions)
     target_list.extend(new_qs)
 
-# אתחול זיכרון
-if 'question_bank' not in st.session_state:
-    st.session_state.question_bank = []
-if 'next_batch' not in st.session_state:
-    st.session_state.next_batch = []
-if 'current_index' not in st.session_state:
-    st.session_state.current_index = 0
-if 'answered' not in st.session_state:
-    st.session_state.answered = False
-if 'user_choice' not in st.session_state:
-    st.session_state.user_choice = None
-if 'is_fetching' not in st.session_state:
-    st.session_state.is_fetching = False
-if 'start_time' not in st.session_state:
-    st.session_state.start_time = None
-if 'exam_mode' not in st.session_state:
-    st.session_state.exam_mode = False
-if 'correct_count' not in st.session_state:
-    st.session_state.correct_count = 0
+for key in ['question_bank', 'next_batch', 'current_index', 'answered', 'user_choice', 'is_fetching', 'start_time', 'exam_mode', 'correct_count']:
+    if key not in st.session_state:
+        st.session_state[key] = [] if 'bank' in key or 'batch' in key else 0 if 'count' in key or 'index' in key else False if 'mode' in key or 'fetching' in key or 'answered' in key else None
 
-st.markdown("<div class='title-text'>🚀 אימון אמירנ\"ט</div>", unsafe_allow_html=True)
-
-# תפריט ראשי מוצג רק אם אין שאלות פעילות
-if not st.session_state.question_bank:
-    mode = st.selectbox("בחר מצב למידה:", 
-                       ["השלמת משפטים", "ניסוח מחדש", "פירוק מורפולוגי (תחיליות וסופיות)", "אלימינציה עיוורת (דקדוק והקשר)", "אוצר מילים ואסוציאציות", "סימולציה מלאה (פרק מעורב 22 שאלות)"])
+# --- תפריט צד (Sidebar) לניווט ויציאה ---
+with st.sidebar:
+    st.markdown("<h2 style='text-align: center; color: #00d2ff;'>🎯 תפריט ניווט</h2>", unsafe_allow_html=True)
     
-    if st.button("התחל תרגול", type="primary"):
-        with st.spinner("בונה מקבץ חכם..."):
-            st.session_state.exam_mode = "סימולציה מלאה" in mode
+    if st.session_state.question_bank:
+        st.success("תרגול פעיל כעת")
+        if st.button("🚪 יציאה למסך הראשי", use_container_width=True):
+            st.session_state.question_bank = []
+            st.session_state.next_batch = []
+            st.rerun()
+    else:
+        st.info("בחר מסלול כדי להתחיל")
+
+# --- אזור התוכן המרכזי ---
+if not st.session_state.question_bank:
+    st.markdown("<div class='title-text animated-box'>בחר את מסלול האימון שלך</div>", unsafe_allow_html=True)
+    mode = st.radio("סוג התרגול:", 
+                    ["השלמת משפטים", "ניסוח מחדש", "פירוק מורפולוגי (תחיליות וסופיות)", "אלימינציה עיוורת (דקדוק והקשר)", "אוצר מילים ואסוציאציות", "סימולציה מלאה (פרק מעורב)"],
+                    horizontal=False)
+    
+    if st.button("התחל תרגול 🚀", type="primary"):
+        with st.spinner("בונה מסלול אימון חכם..."):
+            st.session_state.exam_mode = "סימולציה" in mode
             num_q = 22 if st.session_state.exam_mode else 10
-            # בסימולציה נבחר סוג שאלות מעורב, לצורך הפשטות הקוד ישלח פרומפט משולב או יבחר ברירת מחדל
             fetch_type = "השלמת משפטים" if st.session_state.exam_mode else mode
             
             bank = generate_questions(fetch_type, num_q)
@@ -160,32 +167,28 @@ if not st.session_state.question_bank:
                 st.session_state.next_batch = []
                 st.session_state.is_fetching = False
                 st.rerun()
-            else:
-                st.error("שגיאה בטעינת הנתונים מהמודל. נסה שוב.")
 
-# ניהול רצף השאלות
 if st.session_state.question_bank:
     total = len(st.session_state.question_bank)
     idx = st.session_state.current_index
     q = st.session_state.question_bank[idx]
     
-    # טעינת רקע (Threading) כשמגיעים לשאלה השמינית (במוד תרגול רגיל)
     if not st.session_state.exam_mode and idx == 7 and not st.session_state.is_fetching:
         st.session_state.is_fetching = True
         threading.Thread(target=fetch_in_background, args=("השלמת משפטים", st.session_state.next_batch, 10)).start()
 
-    # תצוגת סטטוס וטיימר בסימולציה
-    stats_html = f"<div class='stats-text'>שאלה {idx + 1} מתוך {total}</div>"
+    # סטטוס עליון
+    stats_html = f"<div class='stats-text animated-box'>שאלה {idx + 1} מתוך {total}</div>"
     if st.session_state.exam_mode:
         elapsed = int(time.time() - st.session_state.start_time)
         mins, secs = divmod(elapsed, 60)
-        stats_html += f"<div class='stats-text' style='color: #d73a49;'>⏱️ זמן רץ: {mins:02d}:{secs:02d}</div>"
+        stats_html += f"<div class='stats-text' style='color: #e53e3e;'>⏱️ {mins:02d}:{secs:02d}</div>"
     st.markdown(stats_html, unsafe_allow_html=True)
     
-    # תצוגת השאלה
-    st.markdown(f"<div class='question-box'>{q['question']}</div>", unsafe_allow_html=True)
+    # שאלה
+    st.markdown(f"<div class='question-box animated-box'>{q['question']}</div>", unsafe_allow_html=True)
     
-    # תצוגת כפתורי התשובות
+    # אפשרויות
     for opt in q['options']:
         if st.button(opt, disabled=st.session_state.answered, key=f"{idx}_{opt}"):
             st.session_state.user_choice = opt
@@ -194,16 +197,34 @@ if st.session_state.question_bank:
                 st.session_state.correct_count += 1
             st.rerun()
 
-    # פידבק והסבר לאחר לחיצה (בסימולציה ההסבר מוסתר עד הסוף)
+    # הסבר מדורג לאחר מענה
     if st.session_state.answered:
         if not st.session_state.exam_mode:
-            if st.session_state.user_choice == q['correct_answer']:
-                st.success("מעולה! 🎯")
-            else:
-                st.error(f"טעות. התשובה הנכונה: {q['correct_answer']}")
-            st.markdown(f"<div class='explanation-box'><b>פיצוח השאלה:</b><br>{q['explanation']}</div>", unsafe_allow_html=True)
+            is_correct = st.session_state.user_choice == q['correct_answer']
+            msg = "מעולה! תשובה נכונה 🎉" if is_correct else f"טעות. התשובה הנכונה: {q['correct_answer']}"
+            if is_correct: st.success(msg) 
+            else: st.error(msg)
+            
+            # מבנה הסבר חדש ומסודר
+            st.markdown(f"""
+            <div class='explanation-box animated-box'>
+                <div class='exp-section'>
+                    <div class='exp-title'>🌍 תרגום:</div>
+                    <div class='exp-text'>{q.get('exp_translation', '')}</div>
+                </div>
+                <div class='exp-section'>
+                    <div class='exp-title'>✅ למה זו התשובה הנכונה?</div>
+                    <div class='exp-text'>{q.get('exp_correct', '')}</div>
+                </div>
+                <div class='exp-section'>
+                    <div class='exp-title'>❌ למה השאר שגויות?</div>
+                    <div class='exp-text'>{q.get('exp_wrong', '')}</div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
         
-        # כפתור מעבר לשאלה הבאה
+        # כפתורי המשך
+        st.write("") # מרווח
         if idx < total - 1:
             if st.button("המשך לשאלה הבאה ➡️", type="primary"):
                 st.session_state.current_index += 1
@@ -211,17 +232,12 @@ if st.session_state.question_bank:
                 st.session_state.user_choice = None
                 st.rerun()
         else:
-            # סיום המקבץ
             if st.session_state.exam_mode:
                 score = int((st.session_state.correct_count / total) * 100)
-                st.markdown(f"<div class='title-text'>סיימת את הסימולציה! 🎓<br>ציון: {score}/100</div>", unsafe_allow_html=True)
-                if st.button("חזור לתפריט הראשי"):
-                    st.session_state.question_bank = []
-                    st.rerun()
+                st.markdown(f"<div class='title-text animated-box'>סיימת את הסימולציה! 🎓<br>ציון: {score}</div>", unsafe_allow_html=True)
             else:
-                # משיכת שאלות מחדר ההמתנה (Threading) במצב רגיל
                 if st.session_state.next_batch:
-                    if st.button("המשך ברצף (המקבץ הבא מוכן) ⚡", type="primary"):
+                    if st.button("המשך ברצף ⚡", type="primary"):
                         st.session_state.question_bank = st.session_state.next_batch.copy()
                         st.session_state.next_batch = []
                         st.session_state.is_fetching = False
@@ -230,6 +246,5 @@ if st.session_state.question_bank:
                         st.session_state.user_choice = None
                         st.rerun()
                 else:
-                    st.info("טוען עוד שאלות משרתי גוגל...")
-                    if st.button("בדוק אם מוכן"):
-                        st.rerun()
+                    st.info("טוען עוד שאלות...")
+                    if st.button("בדוק שוב"): st.rerun()
